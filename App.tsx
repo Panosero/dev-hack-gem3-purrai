@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { Cat, Sparkles, Activity, FileSearch, Shield, BrainCircuit } from 'lucide-react';
+import { Cat, Sparkles, Activity, FileSearch, Shield, BrainCircuit, BookOpen } from 'lucide-react';
 import ImageUploader from './components/ImageUploader';
 import CatProfileCard from './components/CatProfileCard';
 import ChatInterface from './components/ChatInterface';
 import LiveScout from './components/LiveScout';
 import ForensicLab from './components/ForensicLab';
 import TrainingCommand from './components/TrainingCommand';
+import MissionGuide from './components/MissionGuide';
 import { analyzeCatImage, generateSpiritImage } from './services/geminiService';
 import { CatProfile } from './types';
 
@@ -19,6 +20,7 @@ const App: React.FC = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isGeneratingSpirit, setIsGeneratingSpirit] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleImageSelected = async (base64: string, mimeType: string) => {
@@ -89,32 +91,42 @@ const App: React.FC = () => {
             <h1 className="text-xl font-black tracking-tight hidden md:block">Feline<span className="text-orange-500">Ops</span></h1>
           </div>
           
-          <nav className="flex items-center gap-1 bg-slate-800 p-1 rounded-full overflow-x-auto max-w-[280px] md:max-w-none">
-             <button 
-                onClick={() => setActiveModule('profile')}
-                className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all whitespace-nowrap ${activeModule === 'profile' ? 'bg-orange-500 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
-             >
-                Database
-             </button>
-             <button 
-                onClick={() => setActiveModule('training')}
-                className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all whitespace-nowrap ${activeModule === 'training' ? 'bg-purple-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
-             >
-                Training
-             </button>
-             <button 
-                onClick={() => setActiveModule('live')}
-                className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all whitespace-nowrap ${activeModule === 'live' ? 'bg-green-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
-             >
-                Live Scout
-             </button>
-             <button 
-                onClick={() => setActiveModule('forensics')}
-                className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all whitespace-nowrap ${activeModule === 'forensics' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
-             >
-                Forensics
-             </button>
-          </nav>
+          <div className="flex items-center gap-4">
+            <nav className="flex items-center gap-1 bg-slate-800 p-1 rounded-full overflow-x-auto max-w-[200px] md:max-w-none">
+                <button 
+                    onClick={() => setActiveModule('profile')}
+                    className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all whitespace-nowrap ${activeModule === 'profile' ? 'bg-orange-500 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
+                >
+                    Database
+                </button>
+                <button 
+                    onClick={() => setActiveModule('training')}
+                    className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all whitespace-nowrap ${activeModule === 'training' ? 'bg-purple-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
+                >
+                    Training
+                </button>
+                <button 
+                    onClick={() => setActiveModule('live')}
+                    className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all whitespace-nowrap ${activeModule === 'live' ? 'bg-green-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
+                >
+                    Live Scout
+                </button>
+                <button 
+                    onClick={() => setActiveModule('forensics')}
+                    className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all whitespace-nowrap ${activeModule === 'forensics' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
+                >
+                    Forensics
+                </button>
+            </nav>
+
+            <button 
+                onClick={() => setIsGuideOpen(true)}
+                className="bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white p-2 rounded-full transition-colors border border-slate-700"
+                title="Open Field Manual"
+            >
+                <BookOpen className="w-5 h-5" />
+            </button>
+          </div>
         </div>
       </header>
 
@@ -130,6 +142,12 @@ const App: React.FC = () => {
                         <p className="text-lg text-slate-600">
                         Upload subject imagery for RPG-class categorization and personality assessment.
                         </p>
+                        <button 
+                             onClick={() => setIsGuideOpen(true)}
+                             className="mt-2 text-orange-600 font-bold hover:underline text-sm"
+                        >
+                            How does this work?
+                        </button>
                     </div>
 
                     <div className="w-full max-w-xl bg-white p-8 rounded-3xl shadow-xl border border-slate-100">
@@ -231,6 +249,8 @@ const App: React.FC = () => {
             onClose={() => setIsChatOpen(false)}
         />
       )}
+
+      <MissionGuide isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
     </div>
   );
 };

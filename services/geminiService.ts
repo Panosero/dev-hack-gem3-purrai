@@ -1,8 +1,10 @@
 import { GoogleGenAI, Type, Schema, Modality } from "@google/genai";
 import { CatProfile, ForensicReport, TrainingPlan, SearchResult } from "../types";
 
-const apiKey = process.env.API_KEY || '';
-export const getAiClient = () => new GoogleGenAI({ apiKey });
+export const getAiClient = () => {
+  const apiKey = process.env.API_KEY || '';
+  return new GoogleGenAI({ apiKey });
+};
 
 // --- Cat Profile Analysis ---
 
@@ -155,6 +157,47 @@ export const generateTrainingPlan = async (goal: string, profile: CatProfile): P
         return JSON.parse(text) as TrainingPlan;
     } catch (e) {
         console.error("Training generation failed", e);
+        throw e;
+    }
+};
+
+// --- Veo Video Generation ---
+
+export const generateTrainingSimulation = async (profile: CatProfile, outcome: string): Promise<string> => {
+    const ai = getAiClient();
+    const apiKey = process.env.API_KEY || ''; // Must read fresh key here
+    const modelId = "veo-3.1-fast-generate-preview";
+
+    const prompt = `Cinematic shot of a ${profile.visualCharacteristics || 'cute cat'} successfully ${outcome}. 
+    High quality, photorealistic, 4k, cute, happy ending.`;
+
+    try {
+        let operation = await ai.models.generateVideos({
+            model: modelId,
+            prompt: prompt,
+            config: {
+                numberOfVideos: 1,
+                resolution: '720p',
+                aspectRatio: '16:9'
+            }
+        });
+
+        // Polling loop
+        while (!operation.done) {
+            await new Promise(resolve => setTimeout(resolve, 5000));
+            operation = await ai.operations.getVideosOperation({ operation: operation });
+        }
+
+        const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
+        if (!videoUri) throw new Error("Video generation failed");
+
+        // Fetch the video content to avoid exposing API key in the video tag src
+        const response = await fetch(`${videoUri}&key=${apiKey}`);
+        const blob = await response.blob();
+        return URL.createObjectURL(blob);
+
+    } catch (e) {
+        console.error("Veo generation failed", e);
         throw e;
     }
 };

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { CatProfile, TrainingPlan } from '../types';
-import { generateTrainingPlan } from '../services/geminiService';
-import { Target, BrainCircuit, ChevronDown, ChevronRight, CheckCircle2, ClipboardList } from 'lucide-react';
+import { generateTrainingPlan, generateTrainingSimulation } from '../services/geminiService';
+import { Target, BrainCircuit, ChevronDown, ChevronRight, CheckCircle2, ClipboardList, Film, Loader2 } from 'lucide-react';
 
 interface TrainingCommandProps {
     profile: CatProfile;
@@ -12,10 +12,16 @@ const TrainingCommand: React.FC<TrainingCommandProps> = ({ profile }) => {
     const [plan, setPlan] = useState<TrainingPlan | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [activePhase, setActivePhase] = useState<number>(0);
+    
+    // Veo State
+    const [isSimulating, setIsSimulating] = useState(false);
+    const [simulationVideo, setSimulationVideo] = useState<string | null>(null);
 
     const handleGenerate = async () => {
         if (!goal.trim()) return;
         setIsLoading(true);
+        setPlan(null);
+        setSimulationVideo(null);
         try {
             const result = await generateTrainingPlan(goal, profile);
             setPlan(result);
@@ -23,6 +29,34 @@ const TrainingCommand: React.FC<TrainingCommandProps> = ({ profile }) => {
             alert("Strategic planning failed.");
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const handleSimulate = async () => {
+        if (!plan) return;
+        
+        // --- API KEY CHECK FOR VEO ---
+        const win = window as any;
+        if (win.aistudio) {
+            try {
+                const hasKey = await win.aistudio.hasSelectedApiKey();
+                if (!hasKey) {
+                    await win.aistudio.openSelectKey();
+                }
+            } catch (err) {
+                console.warn("API Key selection handling failed", err);
+            }
+        }
+
+        setIsSimulating(true);
+        try {
+            const videoUrl = await generateTrainingSimulation(profile, plan.finalOutcome);
+            setSimulationVideo(videoUrl);
+        } catch (e) {
+            console.error(e);
+            alert("Simulation failed. Please ensure you have selected a valid API Key with billing enabled for Veo.");
+        } finally {
+            setIsSimulating(false);
         }
     };
 
@@ -111,7 +145,7 @@ const TrainingCommand: React.FC<TrainingCommandProps> = ({ profile }) => {
                                 </div>
                             </div>
                             <button 
-                                onClick={() => setPlan(null)}
+                                onClick={() => { setPlan(null); setSimulationVideo(null); }}
                                 className="text-slate-400 hover:text-white text-sm underline"
                             >
                                 New Mission
@@ -138,50 +172,25 @@ const TrainingCommand: React.FC<TrainingCommandProps> = ({ profile }) => {
                                         {activePhase === idx && <ChevronRight className="w-5 h-5 text-purple-400" />}
                                     </button>
                                 ))}
+                                
+                                {/* Outcome & Veo Section */}
                                 <div className="mt-6 bg-slate-800 p-4 rounded-xl border border-slate-700">
                                     <h4 className="font-bold text-green-400 text-sm mb-2 flex items-center gap-2">
                                         <Target className="w-4 h-4" /> Expected Outcome
                                     </h4>
-                                    <p className="text-sm text-slate-300">{plan.finalOutcome}</p>
-                                </div>
-                            </div>
-
-                            {/* Phase Details */}
-                            <div className="lg:col-span-2 bg-slate-800 rounded-2xl p-6 border border-slate-700 min-h-[400px]">
-                                <h4 className="text-purple-400 font-bold uppercase tracking-widest text-xs mb-2">Current Phase Protocol</h4>
-                                <h3 className="text-2xl font-bold text-white mb-2">{plan.phases[activePhase].phaseName}</h3>
-                                <p className="text-slate-400 mb-6 flex items-center gap-2">
-                                    <ClipboardList className="w-4 h-4" />
-                                    Duration: {plan.phases[activePhase].duration}
-                                </p>
-
-                                <div className="space-y-6">
-                                    <div>
-                                        <h5 className="font-bold text-white mb-3">Objectives</h5>
-                                        <ul className="space-y-3">
-                                            {plan.phases[activePhase].objectives.map((obj, i) => (
-                                                <li key={i} className="flex items-start gap-3 text-slate-300">
-                                                    <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0 mt-0.5" />
-                                                    <span>{obj}</span>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </div>
-
-                                    <div className="bg-slate-900/50 p-5 rounded-xl border border-slate-700/50">
-                                        <h5 className="font-bold text-yellow-500 mb-2 text-sm uppercase">Tactical Advice</h5>
-                                        <p className="text-slate-300 italic text-sm">
-                                            "{plan.phases[activePhase].tacticalTips}"
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-};
-
-export default TrainingCommand;
+                                    <p className="text-sm text-slate-300 mb-4">{plan.finalOutcome}</p>
+                                    
+                                    {!simulationVideo ? (
+                                        <button 
+                                            onClick={handleSimulate}
+                                            disabled={isSimulating}
+                                            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 shadow-lg disabled:opacity-50"
+                                        >
+                                            {isSimulating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Film className="w-3 h-3" />}
+                                            {isSimulating ? "Generating Veo Video..." : "Visualize Outcome (Veo)"}
+                                        </button>
+                                    ) : (
+                                        <div className="space-y-2">
+                                            <video 
+                                                src={simulationVideo} 
+                                                autoPlay 

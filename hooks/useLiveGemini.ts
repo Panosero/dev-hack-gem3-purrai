@@ -1,9 +1,21 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { getAiClient } from '../services/geminiService';
-import { Modality, LiveServerMessage } from '@google/genai';
+import { Modality, LiveServerMessage, FunctionDeclaration, Type } from '@google/genai';
 import { createPcmBlob, decodeAudioData, base64ToUint8Array } from '../utils/audioUtils';
 
-export const useLiveGemini = () => {
+// Tool Definition
+const captureSnapshotTool: FunctionDeclaration = {
+    name: 'captureSnapshot',
+    description: 'Captures a high-resolution photo of the current video feed. Use this when the user asks to take a photo, or when you observe something significant like the cat jumping, sleeping, or playing.',
+    parameters: {
+        type: Type.OBJECT,
+        properties: {
+            reason: { type: Type.STRING, description: "Why this moment was captured." }
+        }
+    }
+};
+
+export const useLiveGemini = (onSnapshot?: (base64: string, reason: string) => void) => {
   const [status, setStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
   const [volume, setVolume] = useState(0);
   
@@ -13,6 +25,7 @@ export const useLiveGemini = () => {
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   const outputNodeRef = useRef<GainNode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const videoElementRef = useRef<HTMLVideoElement | null>(null); // Store ref to grab frames
   
   // Ref for the active session promise
   const sessionPromiseRef = useRef<Promise<any> | null>(null);
@@ -24,14 +37,13 @@ export const useLiveGemini = () => {
   const connect = async (videoElement: HTMLVideoElement | null) => {
     try {
       setStatus('connecting');
+      videoElementRef.current = videoElement;
       const ai = getAiClient();
 
       // Setup Audio Contexts
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       audioContextRef.current = new AudioContextClass({ sampleRate: 24000 }); // Output rate
       
-      // Input context (often needs 16kHz for best STT, but browser defaults usually work if we resample)
-      // We will handle resampling in the script processor if needed, but simple ratio works usually.
       const inputCtx = new AudioContextClass({ sampleRate: 16000 });
       
       outputNodeRef.current = audioContextRef.current.createGain();
@@ -53,7 +65,8 @@ export const useLiveGemini = () => {
         model: 'gemini-2.5-flash-native-audio-preview-12-2025',
         config: {
           responseModalities: [Modality.AUDIO],
-          systemInstruction: "You are a tactical command AI observing a feline subject. Describe movements using military jargon mixed with nature documentary style. Be observant of spatial details. Identify threats (toys) and allies (humans).",
+          systemInstruction: "You are a tactical command AI observing a feline subject. Describe movements using military jargon mixed with nature documentary style. Be observant of spatial details. If you see something interesting or if asked, use the captureSnapshot tool.",
+          tools: [{ functionDeclarations: [captureSnapshotTool] }],
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } },
           },
@@ -116,14 +129,14 @@ export const useLiveGemini = () => {
     // Send frames periodically
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
-    const FPS = 2; // Send 2 frames per second to save bandwidth but keep context
+    const FPS = 2; // Send 2 frames per second
     
     const interval = setInterval(() => {
         if (!ctx || status === 'disconnected') {
             clearInterval(interval);
             return;
         }
-        canvas.width = videoEl.videoWidth * 0.5; // Scale down for performance
+        canvas.width = videoEl.videoWidth * 0.5; // Scale down
         canvas.height = videoEl.videoHeight * 0.5;
         ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
         
@@ -138,7 +151,44 @@ export const useLiveGemini = () => {
     }, 1000 / FPS);
   };
 
+  const executeSnapshot = (id: string, name: string, reason: string) => {
+      if (!videoElementRef.current || !onSnapshot) return;
+      
+      const video = videoElementRef.current;
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+          ctx.drawImage(video, 0, 0);
+          const base64 = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+          onSnapshot(base64, reason);
+          
+          // Send response back to model
+          sessionPromiseRef.current?.then(session => {
+              session.sendToolResponse({
+                  functionResponses: [{
+                      id,
+                      name,
+                      response: { result: "Snapshot taken successfully." }
+                  }]
+              });
+          });
+      }
+  };
+
   const handleServerMessage = async (message: LiveServerMessage) => {
+    // Handle Tool Calls
+    if (message.toolCall) {
+        for (const fc of message.toolCall.functionCalls) {
+            if (fc.name === 'captureSnapshot') {
+                const reason = (fc.args as any)?.reason || "Manual capture";
+                executeSnapshot(fc.id, fc.name, reason);
+            }
+        }
+    }
+
+    // Handle Audio
     const base64Audio = message.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
     
     if (base64Audio && audioContextRef.current) {
