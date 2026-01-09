@@ -1,0 +1,8 @@
+{
+  "name": "Purrsona AI: Ops Center",
+  "description": "Advanced tactical analysis and behavioral monitoring system for felines using Gemini Live and Multimodal Video Reasoning.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
